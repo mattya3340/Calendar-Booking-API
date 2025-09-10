@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.api import api_router
 from app.core.config import settings
+from app.db.base_class import Base
+from app.db.session import engine
 
 tags_metadata = [
     {
@@ -55,6 +57,15 @@ if settings.BACKEND_CORS_ORIGINS:
 
 # Include API router
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
+@app.on_event("startup")
+def _create_tables() -> None:
+    """Ensure all database tables are created at startup."""
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        # Log to console; in production, switch to proper logger
+        print(f"[startup] Failed to create tables: {e}")
 
 @app.get("/")
 def root():

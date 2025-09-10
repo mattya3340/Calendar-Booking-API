@@ -57,7 +57,14 @@ class CRUDEvent(CRUDBase[CalendarEvent, EventCreate, EventUpdate]):
     def _combine_dt(self, d: date, t: time) -> datetime:
         return datetime.combine(d, t)
 
-    def create_with_overlap_check(self, db: Session, *, obj_in: EventCreate, lock_timeout_sec: int = 5) -> CalendarEvent:
+    def create_with_overlap_check(
+        self,
+        db: Session,
+        *,
+        obj_in: EventCreate,
+        lock_timeout_sec: int = 5,
+        skip_business_rules: bool | None = None,
+    ) -> CalendarEvent:
         """
         Create an event with concurrency-safe overlap checking.
 
@@ -79,21 +86,26 @@ class CRUDEvent(CRUDBase[CalendarEvent, EventCreate, EventUpdate]):
             if end_dt <= start_dt:
                 raise ValueError("end_time must be after start_time")
 
-            # Weekly holiday validation
-            weekday = start_dt.weekday()  # 0=Mon..6=Sun
-            rule = (
-                db.query(WeeklyHolidayRule)
-                .filter(WeeklyHolidayRule.active == True, WeeklyHolidayRule.weekday == weekday)
-            ).first()
-            if rule:
-                raise ValueError("Selected date is a weekly holiday")
+            # Decide whether to skip business rules (holidays typically block the day)
+            if skip_business_rules is None:
+                skip_business_rules = bool(getattr(obj_in, "is_holiday", False))
 
-            # Business hours validation (if defined)
-            bh = db.query(BusinessHours).filter(BusinessHours.weekday == weekday).first()
-            if bh:
-                # bh.open_time/close_time are time, compare against start/end time components
-                if not (bh.open_time <= start_dt.time() and end_dt.time() <= bh.close_time):
-                    raise ValueError("Time is outside business hours")
+            if not skip_business_rules:
+                # Weekly holiday validation
+                weekday = start_dt.weekday()  # 0=Mon..6=Sun
+                rule = (
+                    db.query(WeeklyHolidayRule)
+                    .filter(WeeklyHolidayRule.active == True, WeeklyHolidayRule.weekday == weekday)
+                ).first()
+                if rule:
+                    raise ValueError("Selected date is a weekly holiday")
+
+                # Business hours validation (if defined)
+                bh = db.query(BusinessHours).filter(BusinessHours.weekday == weekday).first()
+                if bh:
+                    # bh.open_time/close_time are time, compare against start/end time components
+                    if not (bh.open_time <= start_dt.time() and end_dt.time() <= bh.close_time):
+                        raise ValueError("Time is outside business hours")
 
             # Overlap condition: NOT (existing.end <= new.start OR existing.start >= new.end)
             conflict = (

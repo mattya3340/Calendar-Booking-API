@@ -35,7 +35,12 @@ def create_holiday(
     Create new holiday (public).
     """
     holiday_in.is_holiday = True
-    holiday = crud.event.create(db=db, obj_in=holiday_in)
+    # Use overlap-safe creation but skip business rules for holidays
+    holiday = crud.event.create_with_overlap_check(
+        db=db,
+        obj_in=holiday_in,
+        skip_business_rules=True,
+    )
     return holiday
 
 @router.delete("/{holiday_id}", response_model=Event)
