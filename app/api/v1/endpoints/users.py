@@ -50,3 +50,20 @@ def read_user_by_id(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
+
+@router.delete("/{user_id}", response_model=UserSchema)
+def delete_user(
+    *,
+    db: Session = Depends(deps.get_db),
+    user_id: int,
+):
+    """
+    Delete a user by ID (public).
+    In a real-world app, this should be protected and only for superusers.
+    """
+    user = crud.user.get(db=db, id=user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    # The remove method is inherited from CRUDBase
+    deleted_user = crud.user.remove(db=db, id=user_id)
+    return deleted_user

@@ -136,8 +136,8 @@ class APITester:
         today = dt.date.today()
         # Choose a non-holiday weekday: Thursday (3) assuming Wed is weekly holiday
         # Find next Thursday
-        offset = (3 - today.weekday()) % 7
-        day = today + dt.timedelta(days=offset or 1)  # avoid today if same day
+        offset = (3 - today.weekday() + 7) % 7 + 7 # Find next Thursday and add 7 days
+        day = today + dt.timedelta(days=offset)
 
         # Create an event inside business hours (Tue is configured; but we use Thu with no BH -> should pass unless BH set)
         # To ensure BH validation, also set BH for Thursday (3): 09:00-18:00
@@ -201,10 +201,80 @@ class APITester:
                 self._print(f"DELETE /weekly-holidays/{rid}", {"status": r.status_code, "text": r.text})
             except Exception as e:
                 self._print(f"DELETE /weekly-holidays/{rid} failed", {"error": str(e)})
+        
+        # Delete created users
+        for uid in self.created_user_ids:
+            try:
+                r = requests.delete(self._url(f"/users/{uid}"))
+                self._print(f"DELETE /users/{uid}", {"status": r.status_code, "text": r.text})
+            except Exception as e:
+                self._print(f"DELETE /users/{uid} failed", {"error": str(e)})
+
+
+
+    def cleanup_all_test_data(self):
+        """
+        より強力なクリーンアップ処理。
+        現在の実行だけでなく、過去のテストで残ってしまった可能性のある
+        すべてのテストデータをAPI経由で検索し、削除する。
+        """
+        self._print("Running aggressive pre-test cleanup...", {})
+        
+        # イベントをクリーンアップ
+        try:
+            r = requests.get(self._url("/events"), params={"limit": 500})
+            if r.status_code == 200:
+                for event in r.json():
+                    if event.get("representative_name") == "予約 太郎":
+                        requests.delete(self._url(f"/events/{event['id']}"))
+        except Exception:
+            pass # エラーが出ても続行
+
+        # ユーザーをクリーンアップ (superuserは除く)
+        try:
+            r = requests.get(self._url("/users"), params={"limit": 500})
+            if r.status_code == 200:
+                for user in r.json():
+                    if user.get("email", "").startswith("test_") and not user.get("is_superuser"):
+                        requests.delete(self._url(f"/users/{user['id']}"))
+        except Exception:
+            pass
+
+        # 定休日ルールをクリーンアップ
+        try:
+            r = requests.get(self._url("/weekly-holidays"))
+            if r.status_code == 200:
+                for rule in r.json():
+                    if rule.get("name") == "毎週水曜 定休":
+                        requests.delete(self._url(f"/weekly-holidays/{rule['id']}"))
+        except Exception:
+            pass
+
+        # 祝日をクリーンアップ
+        try:
+            start = dt.date.today() - dt.timedelta(days=7)
+            end = start + dt.timedelta(days=30)
+            r = requests.get(self._url("/holidays"), params={"start_date": start.isoformat(), "end_date": end.isoformat()})
+            if r.status_code == 200:
+                for holiday in r.json():
+                    if holiday.get("holiday_name") == "臨時休業":
+                        requests.delete(self._url(f"/holidays/{holiday['id']}"))
+        except Exception:
+            pass
 
     def run(self):
         try:
             self._print("Base URL", {"base_url": self.base_url})
+            
+            # Clean up any leftover data from previous failed runs before starting
+            self._print("Pre-test cleanup", {})
+            self.cleanup_all_test_data()
+
+            self.created_event_ids = []
+            self.created_user_ids = []
+            self.created_weekly_rule_ids = []
+            self.created_holiday_ids = []
+            
             self.test_users()
             self.test_business_hours()
             self.test_weekly_holidays()
