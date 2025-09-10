@@ -1,6 +1,6 @@
 from datetime import datetime, date, time
 from typing import Optional
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 class EventBase(BaseModel):
     event_date: date
@@ -35,6 +35,28 @@ class EventInDBBase(EventBase):
 
     class Config:
         from_attributes = True
+
+    # Coerce ORM DateTime values to date/time for response serialization
+    @field_validator('event_date', mode='before')
+    @classmethod
+    def _coerce_event_date(cls, v):
+        if isinstance(v, datetime):
+            return v.date()
+        return v
+
+    @field_validator('start_time', mode='before')
+    @classmethod
+    def _coerce_start_time(cls, v):
+        if isinstance(v, datetime):
+            return v.time()
+        return v
+
+    @field_validator('end_time', mode='before')
+    @classmethod
+    def _coerce_end_time(cls, v):
+        if isinstance(v, datetime):
+            return v.time()
+        return v
 
 class Event(EventInDBBase):
     pass

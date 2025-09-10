@@ -36,12 +36,16 @@ def create_holiday(
     """
     holiday_in.is_holiday = True
     # Use overlap-safe creation but skip business rules for holidays
-    holiday = crud.event.create_with_overlap_check(
-        db=db,
-        obj_in=holiday_in,
-        skip_business_rules=True,
-    )
-    return holiday
+    try:
+        holiday = crud.event.create_with_overlap_check(
+            db=db,
+            obj_in=holiday_in,
+            skip_business_rules=True,
+        )
+        return holiday
+    except ValueError as e:
+        # Conflict (e.g., overlapping holiday) or invalid time range
+        raise HTTPException(status_code=409, detail=str(e))
 
 @router.delete("/{holiday_id}", response_model=Event)
 def delete_holiday(

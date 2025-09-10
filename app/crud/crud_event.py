@@ -123,6 +123,17 @@ class CRUDEvent(CRUDBase[CalendarEvent, EventCreate, EventUpdate]):
                 .first()
             )
             if conflict:
+                # If both the new entry and the conflicting one are holidays, upsert by updating the existing record
+                if getattr(obj_in, "is_holiday", False) and getattr(conflict, "is_holiday", False):
+                    conflict.holiday_name = obj_in.holiday_name or conflict.holiday_name
+                    # Normalize to provided range to reflect latest intent
+                    conflict.event_date = start_dt.date()
+                    conflict.start_time = start_dt
+                    conflict.end_time = end_dt
+                    db.add(conflict)
+                    db.commit()
+                    db.refresh(conflict)
+                    return conflict
                 raise ValueError("Time slot is already booked")
 
             # No conflict -> create
