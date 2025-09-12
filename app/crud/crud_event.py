@@ -30,7 +30,6 @@ class CRUDEvent(CRUDBase[CalendarEvent, EventCreate, EventUpdate]):
         skip: int = 0,
         limit: int = 100
     ) -> List[CalendarEvent]:
-        # 日付範囲の開始と終了をdatetimeに変換
         start_dt = datetime.combine(start_date, time.min)
         end_dt = datetime.combine(end_date, time.max)
         return (
@@ -68,6 +67,11 @@ class CRUDEvent(CRUDBase[CalendarEvent, EventCreate, EventUpdate]):
         lock_timeout_sec: int = 5,
         skip_business_rules: bool | None = None,
     ) -> CalendarEvent:
+        
+        # 予約日が過去の日付でないかチェック
+        if obj_in.event_date < date.today():
+            raise ValueError("過去の日付には予約できません。")
+
         lock_key = f"event:{obj_in.event_date.isoformat()}"
         db.execute(text("SELECT GET_LOCK(:k, :t)"), {"k": lock_key, "t": lock_timeout_sec})
         try:
@@ -75,7 +79,7 @@ class CRUDEvent(CRUDBase[CalendarEvent, EventCreate, EventUpdate]):
             end_dt = self._combine_dt(obj_in.event_date, obj_in.end_time)
 
             if end_dt <= start_dt:
-                raise ValueError("end_time must be after start_time")
+                raise ValueError("終了時刻は開始時刻より後に設定してください。")
 
             if skip_business_rules is None:
                 skip_business_rules = bool(getattr(obj_in, "is_holiday", False))
@@ -87,15 +91,13 @@ class CRUDEvent(CRUDBase[CalendarEvent, EventCreate, EventUpdate]):
                     .filter(WeeklyHolidayRule.active == True, WeeklyHolidayRule.weekday == weekday)
                 ).first()
                 if rule:
-                    raise ValueError("Selected date is a weekly holiday")
+                    raise ValueError("選択された日付は定休日です。")
 
                 bh = db.query(BusinessHours).filter(BusinessHours.weekday == weekday).first()
                 if bh:
                     if not (bh.open_time <= start_dt.time() and end_dt.time() <= bh.close_time):
-                        raise ValueError("Time is outside business hours")
+                        raise ValueError("時間は営業時間外です。")
             
-
-            # 曖昧な日付比較ではなく、その日の開始から終了までの厳密な範囲で検索
             day_start = datetime.combine(start_dt.date(), time.min)
             day_end = datetime.combine(start_dt.date(), time.max)
 
@@ -124,7 +126,7 @@ class CRUDEvent(CRUDBase[CalendarEvent, EventCreate, EventUpdate]):
                     db.commit()
                     db.refresh(conflict)
                     return conflict
-                raise ValueError("Time slot is already booked")
+                raise ValueError("その時間枠はすでに予約されています。")
 
             db_obj = self.model(
                 event_date=start_dt,
@@ -156,6 +158,11 @@ class CRUDEvent(CRUDBase[CalendarEvent, EventCreate, EventUpdate]):
         cur_end_dt = db_obj.end_time
 
         new_date = obj_in.event_date if obj_in.event_date is not None else cur_date
+        
+        # 更新後の日付が過去でないかチェック
+        if new_date < date.today():
+            raise ValueError("過去の日付には変更できません。")
+        
         new_start_t = obj_in.start_time if obj_in.start_time is not None else cur_start_dt.time()
         new_end_t = obj_in.end_time if obj_in.end_time is not None else cur_end_dt.time()
 
@@ -165,7 +172,7 @@ class CRUDEvent(CRUDBase[CalendarEvent, EventCreate, EventUpdate]):
             start_dt = datetime.combine(new_date, new_start_t)
             end_dt = datetime.combine(new_date, new_end_t)
             if end_dt <= start_dt:
-                raise ValueError("end_time must be after start_time")
+                raise ValueError("終了時刻は開始時刻より後に設定してください。")
 
             weekday = start_dt.weekday()
             rule = (
@@ -173,13 +180,12 @@ class CRUDEvent(CRUDBase[CalendarEvent, EventCreate, EventUpdate]):
                 .filter(WeeklyHolidayRule.active == True, WeeklyHolidayRule.weekday == weekday)
             ).first()
             if rule:
-                raise ValueError("Selected date is a weekly holiday")
+                raise ValueError("選択された日付は定休日です。")
 
             bh = db.query(BusinessHours).filter(BusinessHours.weekday == weekday).first()
             if bh:
                 if not (bh.open_time <= start_dt.time() and end_dt.time() <= bh.close_time):
-                    raise ValueError("Time is outside business hours")
-
+                    raise ValueError("時間は営業時間外です。")
 
             day_start = datetime.combine(start_dt.date(), time.min)
             day_end = datetime.combine(start_dt.date(), time.max)
@@ -198,9 +204,8 @@ class CRUDEvent(CRUDBase[CalendarEvent, EventCreate, EventUpdate]):
                 .with_for_update()
                 .first()
             )
-
             if conflict:
-                raise ValueError("Time slot is already booked")
+                raise ValueError("その時間枠はすでに予約されています。")
 
             db_obj.event_date = start_dt
             db_obj.start_time = start_dt

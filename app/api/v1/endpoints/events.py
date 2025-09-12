@@ -19,7 +19,8 @@ def read_events(
     end_date: Optional[date] = None,
 ):
     """
-    Retrieve events (public). If date range is provided, filter by event_date.
+    予約・予定（イベント）の一覧を取得します（公開）。
+    日付範囲を指定してフィルタリングすることも可能です。
     """
     if start_date and end_date:
         events = crud.event.get_events_in_date_range(
@@ -36,13 +37,14 @@ def create_event(
     event_in: EventCreate,
 ):
     """
-    Create new event (public). New events are not bound to a user (user_id=None).
+    新しい予約・予定（イベント）を作成します（公開）。
+    作成されたイベントは特定のユーザーには紐付きません。
     """
     try:
         event = crud.event.create_with_overlap_check(db=db, obj_in=event_in)
         return event
     except ValueError as e:
-        # Time slot conflict or invalid time range
+        # 時間の重複、または不正な時間範囲が指定された場合
         raise HTTPException(status_code=409, detail=str(e))
 
 @router.put("/{event_id}", response_model=Event)
@@ -53,7 +55,8 @@ def update_event(
     event_in: EventUpdate,
 ):
     """
-    Update an event (public) with concurrency safety and business rules.
+    既存の予約・予定を更新します（公開）。
+    更新時にも重複チェックや営業時間チェックが行われます。
     """
     try:
         event = crud.event.update_with_overlap_check(db=db, event_id=event_id, obj_in=event_in)
@@ -61,7 +64,7 @@ def update_event(
     except ValueError as e:
         detail = str(e)
         if detail == "Event not found":
-            raise HTTPException(status_code=404, detail=detail)
+            raise HTTPException(status_code=404, detail="イベントが見つかりません。")
         raise HTTPException(status_code=409, detail=detail)
 
 @router.get("/{event_id}", response_model=Event)
@@ -70,12 +73,10 @@ def read_event(
     db: Session = Depends(get_db),
     event_id: int,
 ):
-    """
-    Get event by ID (public).
-    """
+    """IDを指定して特定の予約・予定を取得します（公開）。"""
     event = crud.event.get(db=db, id=event_id)
     if not event:
-        raise HTTPException(status_code=404, detail="Event not found")
+        raise HTTPException(status_code=404, detail="イベントが見つかりません。")
     return event
 
 @router.delete("/{event_id}", response_model=Event)
@@ -84,11 +85,9 @@ def delete_event(
     db: Session = Depends(get_db),
     event_id: int,
 ):
-    """
-    Delete an event (public).
-    """
+    """予約・予定を削除します（公開）。"""
     event = crud.event.get(db=db, id=event_id)
     if not event:
-        raise HTTPException(status_code=404, detail="Event not found")
+        raise HTTPException(status_code=404, detail="イベントが見つかりません。")
     event = crud.event.remove(db=db, id=event_id)
     return event

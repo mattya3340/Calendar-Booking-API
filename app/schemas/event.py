@@ -1,19 +1,19 @@
 from datetime import datetime, date, time
 from typing import Optional
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 class EventBase(BaseModel):
-    event_date: date
-    start_time: time
-    end_time: time
-    representative_name: str
-    phone_number: str
-    num_adults: int = Field(ge=0, default=1)
-    num_children: int = Field(ge=0, default=0)
-    notes: Optional[str] = None
-    plan: Optional[str] = None
-    is_holiday: bool = False
-    holiday_name: Optional[str] = None
+    event_date: date = Field(..., description="イベントの日付", examples=["2025-12-25"])
+    start_time: time = Field(..., description="開始時刻", examples=["13:00:00"])
+    end_time: time = Field(..., description="終了時刻", examples=["14:00:00"])
+    representative_name: str = Field(..., description="代表者名")
+    phone_number: str = Field(..., description="電話番号")
+    num_adults: int = Field(1, ge=0, description="大人の人数")
+    num_children: int = Field(0, ge=0, description="子供の人数")
+    notes: Optional[str] = Field(None, description="備考欄")
+    plan: Optional[str] = Field(None, description="利用プランなど")
+    is_holiday: bool = Field(False, description="休日として設定するかどうか")
+    holiday_name: Optional[str] = Field(None, description="休日の名称（is_holidayがtrueの場合）")
 
 class EventCreate(EventBase):
     pass
@@ -28,34 +28,26 @@ class EventUpdate(EventBase):
     num_children: Optional[int] = Field(None, ge=0)
 
 class EventInDBBase(EventBase):
-    id: int
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-    user_id: Optional[int] = None
+    id: int = Field(..., description="イベントID")
+    created_at: datetime = Field(..., description="作成日時")
+    updated_at: Optional[datetime] = Field(None, description="更新日時")
+    user_id: Optional[int] = Field(None, description="関連付けられたユーザーID")
 
     class Config:
         from_attributes = True
 
-    # Coerce ORM DateTime values to date/time for response serialization
-    @field_validator('event_date', mode='before')
+    # データベースから来た値（v）を検証・変換するバリデータを定義します。
+    # mode='before' にすることで、FastAPIがレスポンスを作成する前の段階で型変換が実行されます。
+    @field_validator('event_date', 'start_time', 'end_time', mode='before')
     @classmethod
-    def _coerce_event_date(cls, v):
+    def coerce_datetime_to_specific_type(cls, v, info):
+        # 値がdatetimeオブジェクトの場合のみ処理
         if isinstance(v, datetime):
-            return v.date()
-        return v
-
-    @field_validator('start_time', mode='before')
-    @classmethod
-    def _coerce_start_time(cls, v):
-        if isinstance(v, datetime):
+            # フィールド名に応じて、date型またはtime型に変換して返す
+            if info.field_name == 'event_date':
+                return v.date()
             return v.time()
-        return v
-
-    @field_validator('end_time', mode='before')
-    @classmethod
-    def _coerce_end_time(cls, v):
-        if isinstance(v, datetime):
-            return v.time()
+        # datetimeでなければ元の値をそのまま返す
         return v
 
 class Event(EventInDBBase):

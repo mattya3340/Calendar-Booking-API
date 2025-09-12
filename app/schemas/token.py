@@ -4,14 +4,14 @@ from pydantic import BaseModel, Field
 
 class Token(BaseModel):
     """
-    Token response schema including access token and metadata.
+    認証トークンと関連情報を含むレスポンスのスキーマです。
     """
-    access_token: str = Field(..., description="JWT access token")
-    token_type: str = Field(default="bearer", description="Type of token")
-    expires_in: int = Field(..., description="Time in seconds until the token expires")
+    access_token: str = Field(..., description="JWTアクセストークン")
+    token_type: str = Field(default="bearer", description="トークンの種別")
+    expires_in: int = Field(..., description="トークンの有効期限（秒）")
     key_expires_at: int = Field(
         ...,
-        description="Timestamp when the current signing key will expire"
+        description="署名に使われた鍵の有効期限（UNIXタイムスタンプ）"
     )
 
     class Config:
@@ -26,16 +26,16 @@ class Token(BaseModel):
 
 class TokenPayload(BaseModel):
     """
-    JWT token payload schema.
+    JWTトークンのペイロード（中身）のスキーマです。
     """
-    sub: Optional[int] = Field(None, description="Subject (user ID)")
-    exp: Optional[int] = Field(None, description="Expiration time (UNIX timestamp)")
-    iat: Optional[int] = Field(None, description="Issued at (UNIX timestamp)")
+    sub: Optional[int] = Field(None, description="サブジェクト（通常はユーザーID）")
+    exp: Optional[int] = Field(None, description="トークンの有効期限（UNIXタイムスタンプ）")
+    iat: Optional[int] = Field(None, description="トークンの発行日時（UNIXタイムスタンプ）")
     key_exp: Optional[int] = Field(
-        None, 
-        description="Signing key expiration time (UNIX timestamp)"
+        None,
+        description="署名鍵の有効期限（UNIXタイムスタンプ）"
     )
-    is_superuser: bool = Field(False, description="Whether the user is a superuser")
+    is_superuser: bool = Field(False, description="ユーザーが管理者権限を持つかどうか")
 
     class Config:
         json_schema_extra = {

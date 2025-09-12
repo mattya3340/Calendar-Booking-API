@@ -18,7 +18,7 @@ def read_holidays(
     end_date: date,
 ):
     """
-    Retrieve holidays within a date range (public).
+    指定した期間内の休日設定を取得します（公開）。
     """
     holidays = crud.event.get_holidays_in_date_range(
         db, start_date=start_date, end_date=end_date
@@ -32,7 +32,7 @@ def create_holiday(
     holiday_in: EventCreate,
 ):
     """
-    Create new holiday (public).
+    新しい休日を設定します（公開）。
     """
     holiday_in.is_holiday = True
     # Use overlap-safe creation but skip business rules for holidays
@@ -54,7 +54,7 @@ def delete_holiday(
     holiday_id: int,
 ):
     """
-    Delete a holiday (public).
+    休日設定を削除します（公開）。
     """
     holiday = crud.event.get(db=db, id=holiday_id)
     if not holiday or not holiday.is_holiday:

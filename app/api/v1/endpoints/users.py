@@ -15,7 +15,7 @@ def read_users(
     skip: int = 0,
     limit: int = 100,
 ):
-    """Retrieve users (no authentication required)."""
+    """ユーザー情報の一覧を取得します（認証不要）。"""
     return crud.user.get_multi(db, skip=skip, limit=limit)
 
 @router.post("/", response_model=UserSchema)
@@ -24,20 +24,20 @@ def create_user(
     db: Session = Depends(deps.get_db),
     user_in: UserCreate,
 ):
-    """Create new user (no authentication required)."""
+    """新しいユーザーを作成します（認証不要）。"""
     user = crud.user.get_by_email(db, email=user_in.email)
     if user:
-        raise HTTPException(status_code=400, detail="User with this email already exists")
+        raise HTTPException(status_code=400, detail="このメールアドレスは既に使用されています。")
     return crud.user.create(db, obj_in=user_in)
 
 @router.get("/me")
 def read_user_me():
-    """Disabled because authentication is turned off."""
+    """（利用不可）認証が無効化されているため、このエンドポイントは使用できません。"""
     raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Authentication is disabled")
 
 @router.put("/me")
 def update_user_me():
-    """Disabled because authentication is turned off."""
+    """（利用不可）認証が無効化されているため、このエンドポイントは使用できません。"""
     raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Authentication is disabled")
 
 @router.get("/{user_id}", response_model=UserSchema)
@@ -45,10 +45,10 @@ def read_user_by_id(
     user_id: int,
     db: Session = Depends(deps.get_db),
 ):
-    """Get a specific user by id (no authentication required)."""
+    """IDを指定して特定のユーザー情報を取得します（認証不要）。"""
     user = crud.user.get(db, id=user_id)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="ユーザーが見つかりません。")
     return user
 
 @router.delete("/{user_id}", response_model=UserSchema)
@@ -58,12 +58,11 @@ def delete_user(
     user_id: int,
 ):
     """
-    Delete a user by ID (public).
-    In a real-world app, this should be protected and only for superusers.
+    IDを指定してユーザーを削除します（公開API）。
+    注意：実際のアプリケーションでは管理者権限で保護すべきです。
     """
     user = crud.user.get(db=db, id=user_id)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    # The remove method is inherited from CRUDBase
+        raise HTTPException(status_code=404, detail="ユーザーが見つかりません。")
     deleted_user = crud.user.remove(db=db, id=user_id)
     return deleted_user
